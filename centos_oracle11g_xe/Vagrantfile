@@ -1,0 +1,45 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+Vagrant.configure("2") do |config|
+  config.vm.box = "centos/7"
+
+  config.vm.network "forwarded_port", guest: 1521, host: 1521
+  config.vm.network "forwarded_port", guest: 8080, host: 8780
+
+  config.vm.provider "virtualbox" do |vb|
+     vb.memory = "2400"
+  end
+
+  config.vm.provision "shell", inline: <<-SHELL
+     yum -y install mc vim unzip git net-tools libaio bc flex make binutils gcc
+     swapoff -a
+     dd if=/dev/zero of=/vagrant/swapfile bs=1M count=1300
+     mkswap /vagrant/swapfile
+     chmod 600 /vagrant/swapfile
+     swapon -a /vagrant/swapfile
+     echo '/vagrant/swapfile none swap sw 0 0' >> /etc/fstab
+     echo vm.swappiness = 10 >> /etc/sysctl.conf && echo vm.vfs_cache_pressure = 50 >> /etc/sysctl.conf && sysctl -p
+
+     rpm -ivh /vagrant/oracle-xe-11.2.0-1.0.x86_64.rpm
+
+     git clone https://github.com/GaraninR/oracle_scripts.git /vagrant/oracle_scripts
+     cat /u01/app/oracle/product/11.2.0/xe/bin/oracle_env.sh >> /home/vagrant/.bashrc
+     /etc/init.d/oracle-xe configure responseFile=/vagrant/oracle_scripts/xe.rsp
+
+     mkdir /opt/ora
+     mkdir /opt/java
+     unzip /vagrant/sqlcl-18.2.0.zip -d /opt/ora
+     tar -xvvzf /vagrant/jre-8u181-linux-x64.tar.gz -C /opt/java
+
+     echo 'export SQL_HOME=/opt/ora/sqlcl' >> /home/vagrant/.bashrc
+     echo 'export LD_LIBRARY_PATH=$ORACLE_HOME/lib:/lib:/usr/lib:$SQL_HOME/lib' >> /home/vagrant/.bashrc
+     echo 'export JRE_HOME=/opt/java/jre1.8.0_181' >> /home/vagrant/.bashrc
+     echo 'export PATH=$PATH:$JRE_HOME/bin:$SQL_HOME/bin' >> /home/vagrant/.bashrc
+     echo 'export CLASSPATH=$LD_LIBRARY_PATH:$JRE_HOME/lib' >> /home/vagrant/.bashrc
+
+     # echo exit | sqlplus -S sys/123456 as sysdba @/vagrant/oracle_scripts/oracle_xe_11g_local_prepare.sqlplus
+     # echo exit | sqlplus -S scott/tiger @/vagrant/oracle_scripts/scott.sqlplus
+  SHELL
+
+end
